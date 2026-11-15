@@ -1,0 +1,73 @@
+"""Point d'entrée : python main.py"""
+import tkinter as tk
+
+from ecran_jeu import EcranJeu
+from ecrans import EcranFin, EcranMenu, EcranScores
+from modeles import Partie
+from sauvegarde import GestionSauvegarde
+
+
+class Application(tk.Tk):
+    """Fenêtre principale : change d'écran selon les actions du joueur."""
+
+    def __init__(self):
+        super().__init__()
+        self.title("Attrape-Fruits")
+        self.resizable(False, False)
+        self._sauvegarde = GestionSauvegarde()
+        self._ecran = None
+        self.protocol("WM_DELETE_WINDOW", self.quitter)
+        self.afficher_menu()
+
+    def _changer_ecran(self, ecran):
+        if self._ecran is not None:
+            self._ecran.destroy()
+        self._ecran = ecran
+        ecran.pack()
+
+    # --- Écrans -------------------------------------------------------------
+    def afficher_menu(self):
+        existe = self._sauvegarde.charger_partie() is not None
+        self._changer_ecran(EcranMenu(self, existe, self.nouvelle_partie, self.continuer,
+                                      self.afficher_scores, self.quitter))
+
+    def afficher_scores(self):
+        self._changer_ecran(EcranScores(self, self._sauvegarde, self.afficher_menu))
+
+    def _lancer(self, partie):
+        ecran = EcranJeu(self, partie, self.fin_de_partie, self.pause)
+        self._changer_ecran(ecran)
+        ecran.demarrer()
+
+    def nouvelle_partie(self):
+        self._lancer(Partie())
+
+    def continuer(self):
+        partie = self._sauvegarde.charger_partie()
+        if partie is None:
+            self.nouvelle_partie()
+        else:
+            self._lancer(partie)
+
+    # --- Événements du jeu --------------------------------------------------
+    def pause(self, partie):
+        """Touche P : on sauvegarde la partie et on retourne au menu."""
+        self._sauvegarde.sauvegarder_partie(partie)
+        self.afficher_menu()
+
+    def fin_de_partie(self, partie):
+        """Plus de vies : la partie en cours est effacée, on affiche le résultat."""
+        self._sauvegarde.effacer_partie()
+        self._changer_ecran(EcranFin(self, partie.score, self._sauvegarde,
+                                     self.nouvelle_partie, self.afficher_menu))
+
+    def quitter(self):
+        """Si on ferme la fenêtre en pleine partie, on la sauvegarde."""
+        if isinstance(self._ecran, EcranJeu) and self._ecran.en_cours:
+            self._ecran.arreter()
+            self._sauvegarde.sauvegarder_partie(self._ecran.partie)
+        self.destroy()
+
+
+if __name__ == "__main__":
+    Application().mainloop()
